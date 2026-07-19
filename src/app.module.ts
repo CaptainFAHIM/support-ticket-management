@@ -7,6 +7,7 @@ import {
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { MailerModule } from '@nestjs-modules/mailer';
 
 // Feature modules
 import { AuthModule } from './auth/auth.module';
@@ -52,25 +53,38 @@ import { LoggingMiddleware } from './common/middleware/logging.middleware';
     }),
 
     // ── Database ───────────────────────────────────────────────────────────
+    //Nadia
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        type: 'mysql',
-        host: configService.get<string>('DB_HOST', 'localhost'),
-        port: configService.get<number>('DB_PORT', 3306),
-        username: configService.get<string>('DB_USERNAME', 'root'),
-        password: configService.get<string>('DB_PASSWORD', ''),
-        database: configService.get<string>('DB_NAME', 'support_tickets'),
-        entities: [User, Product, Ticket, Comment],
-        /**
-         * synchronize: true auto-creates/alters tables from entity definitions.
-         * ⚠️  NEVER use synchronize: true in production — use migrations instead.
-         */
-        synchronize: configService.get<string>('NODE_ENV') !== 'production',
-        logging: configService.get<string>('NODE_ENV') === 'development',
-      }),
+  imports: [ConfigModule],
+  inject: [ConfigService],
+  useFactory: (configService: ConfigService) => ({
+    type: 'postgres',
+    host: configService.get<string>('DB_HOST', 'localhost'),
+    port: configService.get<number>('DB_PORT', 5432),
+    username: configService.get<string>('DB_USERNAME', 'postgres'),
+    password: configService.get<string>('DB_PASSWORD', ''),
+    database: configService.get<string>('DB_NAME', 'support_tickets'),
+    entities: [User, Product, Ticket, Comment],
+    synchronize: configService.get<string>('NODE_ENV') !== 'production',
+    logging: configService.get<string>('NODE_ENV') === 'development',
+  }),
+}),
+
+// ── Mailer ─────────────────────────────────────────────────────────────
+//Nadia
+    MailerModule.forRoot({
+      transport: {
+        host: 'smtp.gmail.com',
+        port: 465,
+        ignoreTLS: true,
+        secure: true,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      },
     }),
+
 
     // ── Feature modules ────────────────────────────────────────────────────
     AuthModule,

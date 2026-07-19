@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Ticket } from './entities/ticket.entity';
+import { Ticket, TicketStatus} from './entities/ticket.entity';
 
 /**
  * TicketsService
@@ -29,5 +29,39 @@ export class TicketsService {
     private readonly ticketsRepository: Repository<Ticket>,
   ) {}
 
-  // Placeholder — full implementation coming next
+  //Nadia
+async findOne(id: number): Promise<Ticket | null> {
+  return await this.ticketsRepository.findOne({
+    where: { id },
+    relations: { customer: true, assignee: true },
+  });
 }
+  async assign(ticketId: number, assigneeId: number): Promise<Ticket | null> {
+    const ticket = await this.findOne(ticketId);
+    if (!ticket) return null;
+    ticket.assignee = { id: assigneeId } as any;
+    ticket.status = TicketStatus.InProgress;
+    return await this.ticketsRepository.save(ticket);
+  }
+  async close(ticketId: number): Promise<Ticket | null> {
+    const ticket = await this.findOne(ticketId);
+    if (!ticket) return null;
+    ticket.status = TicketStatus.Closed;
+    return await this.ticketsRepository.save(ticket);
+  }
+
+  /**  flexible filtering. */
+  async search(status?: string, priority?: string): Promise<Ticket[]> {
+    const query = this.ticketsRepository
+      .createQueryBuilder('ticket')
+      .leftJoinAndSelect('ticket.customer', 'customer')
+      .leftJoinAndSelect('ticket.assignee', 'assignee');
+
+    if (status) query.andWhere('ticket.status = :status', { status });
+    if (priority) query.andWhere('ticket.priority = :priority', { priority });
+
+    return await query.getMany();
+  }
+}
+
+//nADIA

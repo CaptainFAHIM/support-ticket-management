@@ -1,27 +1,39 @@
-import { Injectable } from '@nestjs/common';
+//Nadia
+
+import {
+  ConflictException,
+  ForbiddenException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 import { User } from '../users/entities/user.entity';
+import { UsersService } from '../users/users.service';
+import { MailerService } from '@nestjs-modules/mailer';
+import { Role } from '../common/enums/role.enum';
+import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
+import { ApplyManagerDto } from './dto/apply-manager.dto';
 
 /**
  * AuthService
  *
- * Handles authentication concerns: validating credentials and issuing tokens.
- *
- * TODO:
- *  - register(dto)        → hash password with bcrypt, create User, return token
- *  - login(dto)           → validate credentials, return signed JWT
- *  - validateUser(email, pass) → called internally by local strategy (if added)
- *  - refreshToken(token)  → validate refresh token, issue new access token
+ * Handles authentication concerns: registration, login, and the
+ * manager-application / admin-approval onboarding flow.
  */
 @Injectable()
 export class AuthService {
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly usersService: UsersService,
+    private readonly mailerService: MailerService,
+  ) {}
 
-  /**
-   * Signs and returns a JWT access token for the given user.
-   * Called after successful registration or login.
-   */
   generateToken(user: Pick<User, 'id' | 'email' | 'role'>): string {
     const payload: JwtPayload = {
       sub: user.id,
@@ -31,5 +43,107 @@ export class AuthService {
     return this.jwtService.sign(payload);
   }
 
-  // Placeholder — full register/login implementation coming next
-}
+  async register(dto: RegisterDto) {
+    try {
+      const existing = await this.usersService.findByEmail(dto.email);
+      if (existing) {
+        throw new ConflictException('Email already registered');
+      }
+
+      const hashedPassword = await bcrypt.hash(dto.password, 10);
+      const user = await this.usersService.createUser({
+        email: dto.email,
+        password: hashedPassword,
+        role: Role.Customer,
+      });
+
+      await this.mailerService.sendMail({
+        to: user.email,
+        subject: 'Welcome to Helpdesk',
+        text: 'Your account has been created successfully.',
+      });
+
+      return { accessToken: this.generateToken(user) };
+    } catch (error) {
+      throw new HttpException(
+        { status: HttpStatus.BAD_REQUEST, error: error.message || 'Registration failed' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  async login(dto: LoginDto) {
+    try {
+      const user = await this.usersService.findByEmailWithPassword(dto.email);
+      if (!user) {
+        throw new UnauthorizedException('Invalid email or password');
+      }
+
+      const passwordMatches = await bcrypt.compare(dto.password, user.password);
+      if (!passwordMatches) {
+        throw new UnauthorizedException('Invalid email or password');
+      }
+
+      return { accessToken: this.generateToken(user) };
+    } catch (error) {
+      throw new HttpException(
+        { status: HttpStatus.UNAUTHORIZED, error: error.message || 'Login failed' },
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+  }
+
+  async applyForManager(dto: ApplyManagerDto) {
+    try {
+      const existing = await this.usersService.findByEmail(dto.email);
+      if (existing) {
+        throw new ConflictException('Email already in use');
+      }
+
+      const user = await this.usersService.createUser({
+        email: dto.email,
+        password: '',
+        role: Role.Manager,
+      });
+
+      return {
+        message: 'Application submitted. Awaiting admin approval.',
+        userId: user.id,
+      };
+    } catch (error) {
+      throw new HttpException(
+        { status: HttpStatus.BAD_REQUEST, error: error.message || 'Application failed' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  async approveManager(userId: number) {
+    try {
+      const user = await this.usersService.findById(userId);
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+      if (user.role !== Role.Manager) {
+        throw new ForbiddenException('User is not a pending manager application');
+      }
+
+      const temporaryPassword = Math.random().toString(36).slice(-8);
+      const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+      await this.usersService.updatePassword(user.id, hashedPassword);
+
+      await this.mailerService.sendMail({
+        to: user.email,
+        subject: 'Manager Application Approved',
+        text: `Your temporary password is: ${temporaryPassword}. Please log in and change it.`,
+      });
+
+      return { message: 'Manager approved and notified by email' };
+    } catch (error) {
+      throw new HttpException(
+        { status: HttpStatus.BAD_REQUEST, error: error.message || 'Approval failed' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+} //Nadia
