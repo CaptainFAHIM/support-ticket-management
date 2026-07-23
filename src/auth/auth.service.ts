@@ -10,6 +10,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 import { User } from '../users/entities/user.entity';
@@ -20,19 +21,16 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ApplyManagerDto } from './dto/apply-manager.dto';
 
-/**
- * AuthService
- *
- * Handles authentication concerns: registration, login, and the
- * manager-application / admin-approval onboarding flow.
- */
+
 @Injectable()
 export class AuthService {
   constructor(
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
     private readonly mailerService: MailerService,
+    private readonly configService: ConfigService,
   ) {}
+
 
   generateToken(user: Pick<User, 'id' | 'email' | 'role'>): string {
     const payload: JwtPayload = {
@@ -41,6 +39,27 @@ export class AuthService {
       role: user.role,
     };
     return this.jwtService.sign(payload);
+  }
+
+  
+ generateRefreshToken(user: Pick<User, 'id' | 'email' | 'role'>): string {
+  const payload: JwtPayload = {
+    sub: user.id,
+    email: user.email,
+    role: user.role,
+  };
+  return this.jwtService.sign(payload, {
+    secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+    expiresIn: (this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '7d') as `${number}${'s' | 'm' | 'h' | 'd' | 'w' | 'y'}`,
+  });
+}
+
+  
+  private async issueTokens(user: User) {
+    const accessToken = this.generateToken(user);
+    const refreshToken = this.generateRefreshToken(user);
+    await this.usersService.updateRefreshToken(user.id, refreshToken);
+    return { accessToken, refreshToken };
   }
 
   async register(dto: RegisterDto) {
@@ -63,7 +82,7 @@ export class AuthService {
         text: 'Your account has been created successfully.',
       });
 
-      return { accessToken: this.generateToken(user) };
+      return this.issueTokens(user);
     } catch (error) {
       throw new HttpException(
         { status: HttpStatus.BAD_REQUEST, error: error.message || 'Registration failed' },
@@ -84,11 +103,28 @@ export class AuthService {
         throw new UnauthorizedException('Invalid email or password');
       }
 
-      return { accessToken: this.generateToken(user) };
+      return this.issueTokens(user);
     } catch (error) {
       throw new HttpException(
         { status: HttpStatus.UNAUTHORIZED, error: error.message || 'Login failed' },
         HttpStatus.UNAUTHORIZED,
+      );
+    }
+  }
+
+ 
+  async refreshTokens(userId: number, presentedRefreshToken: string) {
+    try {
+      const stored = await this.usersService.findByIdWithRefreshToken(userId);
+      if (!stored?.refreshToken || stored.refreshToken !== presentedRefreshToken) {
+        throw new ForbiddenException('Access denied');
+      }
+
+      return this.issueTokens(stored);
+    } catch (error) {
+      throw new HttpException(
+        { status: HttpStatus.FORBIDDEN, error: error.message || 'Could not refresh token' },
+        HttpStatus.FORBIDDEN,
       );
     }
   }
@@ -146,4 +182,5 @@ export class AuthService {
       );
     }
   }
-} //Nadia
+}
+//Nadia
