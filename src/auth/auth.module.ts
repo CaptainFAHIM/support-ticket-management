@@ -2,22 +2,14 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MailerModule } from '@nestjs-modules/mailer';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
 import { UsersModule } from '../users/users.module';
-import { MailerModule } from '@nestjs-modules/mailer';
-/**
- * AuthModule
- *
- * Wires together:
- *  - PassportModule (default strategy: jwt)
- *  - JwtModule (async config reads JWT_SECRET + JWT_EXPIRES_IN from env)
- *  - JwtStrategy (Passport strategy provider)
- *  - UsersModule (so AuthService can look up users by email)
- *
- * JwtModule is exported so other modules can call JwtService.sign() if needed.
- */
+
+
 @Module({
   imports: [
     UsersModule,
@@ -34,7 +26,7 @@ import { MailerModule } from '@nestjs-modules/mailer';
       }),
     }),
   ],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, JwtRefreshStrategy],
   controllers: [AuthController],
   exports: [JwtModule, AuthService],
 })

@@ -65,7 +65,7 @@ import { LoggingMiddleware } from './common/middleware/logging.middleware';
     password: configService.get<string>('DB_PASSWORD', ''),
     database: configService.get<string>('DB_NAME', 'support_tickets'),
     entities: [User, Product, Ticket, Comment],
-    synchronize: configService.get<string>('NODE_ENV') !== 'production',
+  synchronize: false,
     logging: configService.get<string>('NODE_ENV') === 'development',
   }),
 }),
