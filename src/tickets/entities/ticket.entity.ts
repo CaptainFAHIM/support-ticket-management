@@ -6,7 +6,9 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  JoinColumn,
 } from 'typeorm';
+import { Product } from '../../products/entities/product.entity';
 
 export enum TicketStatus {
   Open = 'Open',
@@ -46,10 +48,17 @@ export class Ticket {
   updatedAt: Date;
 
   @ManyToOne('User', 'ownedTickets')
+  @JoinColumn({ name: 'customerId' })
   customer: any;
 
   @ManyToOne('User', 'assignedTickets', { nullable: true })
+  @JoinColumn({ name: 'assigneeId' })
   assignee: any;
+
+  @ManyToOne(() => Product, (product) => product.tickets, { nullable: true })
+  @JoinColumn({ name: 'productId' })
+  product: Product | null;
+
   @OneToMany('Comment', 'ticket')
-comments: any[];
+  comments: any[];
 }

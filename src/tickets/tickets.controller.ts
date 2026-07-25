@@ -15,7 +15,9 @@ import { TicketsService } from './tickets.service';
 import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
+import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Tickets')
 @Controller('tickets')
 export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
@@ -37,6 +39,17 @@ export class TicketsController {
   }
 
   @Roles(Role.Admin, Role.Manager)
+  @ApiOperation({ summary: 'Assign a ticket to another user' })
+  @ApiBody({
+    type: AssignTicketDto,
+    examples: {
+      default: {
+        value: {
+          assigneeId: 2,
+        },
+      },
+    },
+  })
   @Patch(':id/assign')
   async assign(
     @Param('id', ParseIntPipe) id: number,
@@ -73,6 +86,9 @@ export class TicketsController {
     }
   }
 
+  @ApiOperation({ summary: 'Search tickets by status or priority' })
+  @ApiQuery({ name: 'status', required: false, example: 'Open' })
+  @ApiQuery({ name: 'priority', required: false, example: 'High' })
   @Get()
   async search(
     @Query('status') status?: string,
