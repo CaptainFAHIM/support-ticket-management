@@ -15,7 +15,9 @@ import { TicketsService } from './tickets.service';
 import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
+import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Tickets')
 @Controller('tickets')
 export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
@@ -37,6 +39,7 @@ export class TicketsController {
   }
 
   @Roles(Role.Admin, Role.Manager)
+<<<<<<< HEAD
 @Patch(':id/assign')
 async assign(
   @Param('id', ParseIntPipe) id: number,
@@ -46,6 +49,35 @@ async assign(
     const result = await this.ticketsService.assign(id, dto.assigneeId);
     if (!result) {
       throw new HttpException('Ticket not found', HttpStatus.NOT_FOUND);
+=======
+  @ApiOperation({ summary: 'Assign a ticket to another user' })
+  @ApiBody({
+    type: AssignTicketDto,
+    examples: {
+      default: {
+        value: {
+          assigneeId: 2,
+        },
+      },
+    },
+  })
+  @Patch(':id/assign')
+  async assign(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AssignTicketDto,
+  ) {
+    try {
+      const ticket = await this.ticketsService.assign(id, dto.assigneeId);
+      if (!ticket) {
+        throw new HttpException('Ticket not found', HttpStatus.NOT_FOUND);
+      }
+      return ticket;
+    } catch (error) {
+      throw new HttpException(
+        { status: HttpStatus.BAD_REQUEST, error: error.message || 'Assignment failed' },
+        HttpStatus.BAD_REQUEST,
+      );
+>>>>>>> 452689b3039703c5a031d15be13d37efd0074a22
     }
     return {
       ...result.ticket,
@@ -77,6 +109,9 @@ async assign(
     }
   }
 
+  @ApiOperation({ summary: 'Search tickets by status or priority' })
+  @ApiQuery({ name: 'status', required: false, example: 'Open' })
+  @ApiQuery({ name: 'priority', required: false, example: 'High' })
   @Get()
   async search(
     @Query('status') status?: string,

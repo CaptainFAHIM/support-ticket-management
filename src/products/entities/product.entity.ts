@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   OneToMany,
 } from 'typeorm';
+import { Ticket } from '../../tickets/entities/ticket.entity';
 
 /**
  * Product entity.
@@ -37,6 +38,6 @@ export class Product {
 
   // ── Relations ─────────────────────────────────────────────────────────────
 
-  @OneToMany('Ticket', 'product')
-  tickets: any[];
+  @OneToMany(() => Ticket, (ticket) => ticket.product)
+  tickets: Ticket[];
 }
