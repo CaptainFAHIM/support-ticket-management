@@ -57,30 +57,75 @@ export class UsersService {
       .getOne();
   }
 
+  async findCustomerById(id: number): Promise<User | null> {
+    return await this.usersRepository.findOne({
+      where: { id, role: Role.Customer },
+    });
+  }
 
-async findCustomerById(id: number): Promise<User | null> {
-  return await this.usersRepository.findOne({
-    where: { id, role: Role.Customer },
-  });
-}
+  async findAllCustomers(): Promise<User[]> {
+    return await this.usersRepository.find({ where: { role: Role.Customer } });
+  }
 
-async findAllCustomers(): Promise<User[]> {
-  return await this.usersRepository.find({ where: { role: Role.Customer } });
-}
+  async updateCustomer(id: number, dto: { email?: string }): Promise<User | null> {
+    const customer = await this.findCustomerById(id);
+    if (!customer) return null;
+    Object.assign(customer, dto);
+    return await this.usersRepository.save(customer);
+  }
 
-async updateCustomer(id: number, dto: { email?: string }): Promise<User | null> {
-  const customer = await this.findCustomerById(id);
-  if (!customer) return null;
-  Object.assign(customer, dto);
-  return await this.usersRepository.save(customer);
-}
+  async removeCustomer(id: number): Promise<boolean> {
+    const customer = await this.findCustomerById(id);
+    if (!customer) return false;
+    const result = await this.usersRepository.delete(id);
+    return (result.affected ?? 0) > 0;
+  }
 
-async removeCustomer(id: number): Promise<boolean> {
-  const customer = await this.findCustomerById(id);
-  if (!customer) return false;
-  const result = await this.usersRepository.delete(id);
-  return (result.affected ?? 0) > 0;
-}
+  // ── Admin-only methods ──────────────────────────────────────────────────────
+  // Fahim
+
+  /**
+   * List all users, optionally filtered by role.
+   * Admin only.
+   */
+  async findAll(role?: Role): Promise<User[]> {
+    const where = role ? { role } : {};
+    return await this.usersRepository.find({
+      where,
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Find any user by ID (not restricted to a specific role).
+   * Admin only.
+   */
+  async findUserById(id: number): Promise<User> {
+    const user = await this.usersRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`User with id ${id} not found`);
+    }
+    return user;
+  }
+
+  /**
+   * Change a user's role.
+   * Admin only.
+   */
+  async updateUserRole(id: number, role: Role): Promise<User> {
+    const user = await this.findUserById(id);
+    user.role = role;
+    return await this.usersRepository.save(user);
+  }
+
+  /**
+   * Hard-delete any user by ID.
+   * Admin only.
+   */
+  async deleteUser(id: number): Promise<void> {
+    const user = await this.findUserById(id);
+    await this.usersRepository.remove(user);
+  }
 }
 
 //Nadia
