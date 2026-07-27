@@ -36,13 +36,22 @@ async findOne(id: number): Promise<Ticket | null> {
     relations: { customer: true, assignee: true },
   });
 }
-  async assign(ticketId: number, assigneeId: number): Promise<Ticket | null> {
-    const ticket = await this.findOne(ticketId);
-    if (!ticket) return null;
-    ticket.assignee = { id: assigneeId } as any;
-    ticket.status = TicketStatus.InProgress;
-    return await this.ticketsRepository.save(ticket);
-  }
+  async assign(
+  ticketId: number,
+  assigneeId: number,
+): Promise<{ ticket: Ticket; wasReassigned: boolean; previousAssigneeId: number | null } | null> {
+  const ticket = await this.findOne(ticketId);
+  if (!ticket) return null;
+
+  const previousAssigneeId = (ticket as any).assigneeId ?? null;
+  const wasReassigned = previousAssigneeId !== null && previousAssigneeId !== assigneeId;
+
+  (ticket as any).assigneeId = assigneeId;
+  ticket.status = TicketStatus.InProgress;
+  const saved = await this.ticketsRepository.save(ticket);
+
+  return { ticket: saved, wasReassigned, previousAssigneeId };
+}
   async close(ticketId: number): Promise<Ticket | null> {
     const ticket = await this.findOne(ticketId);
     if (!ticket) return null;

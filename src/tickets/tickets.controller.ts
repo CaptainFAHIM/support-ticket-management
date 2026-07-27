@@ -37,24 +37,28 @@ export class TicketsController {
   }
 
   @Roles(Role.Admin, Role.Manager)
-  @Patch(':id/assign')
-  async assign(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: AssignTicketDto,
-  ) {
-    try {
-      const ticket = await this.ticketsService.assign(id, dto.assigneeId);
-      if (!ticket) {
-        throw new HttpException('Ticket not found', HttpStatus.NOT_FOUND);
-      }
-      return ticket;
-    } catch (error) {
-      throw new HttpException(
-        { status: HttpStatus.BAD_REQUEST, error: error.message || 'Assignment failed' },
-        HttpStatus.BAD_REQUEST,
-      );
+@Patch(':id/assign')
+async assign(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() dto: AssignTicketDto,
+) {
+  try {
+    const result = await this.ticketsService.assign(id, dto.assigneeId);
+    if (!result) {
+      throw new HttpException('Ticket not found', HttpStatus.NOT_FOUND);
     }
+    return {
+      ...result.ticket,
+      action: result.wasReassigned ? 'reassigned' : 'assigned',
+      previousAssigneeId: result.previousAssigneeId,
+    };
+  } catch (error) {
+    throw new HttpException(
+      { status: HttpStatus.BAD_REQUEST, error: error.message || 'Assignment failed' },
+      HttpStatus.BAD_REQUEST,
+    );
   }
+}
 
   @Roles(Role.Manager)
   @Patch(':id/close')
