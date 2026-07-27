@@ -1,27 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Ticket, TicketStatus} from './entities/ticket.entity';
+import { Ticket, TicketStatus, TicketPriority } from './entities/ticket.entity';
 
-/**
- * TicketsService
- *
- * Core business logic for support ticket management.
- *
- * TODO:
- *  - createTicket(dto, customerId)
- *  - findAll(filters)       → paginated, filter by status / priority / product
- *  - findOne(id)
- *  - assignTicket(id, assigneeId)
- *  - updateStatus(id, status)
- *  - updatePriority(id, priority)
- *  - deleteTicket(id)       → soft-delete or Admin-only hard delete
- *
- * Access control notes:
- *  - Customers may only see/edit their own tickets.
- *  - Managers see tickets for products they manage (future feature).
- *  - Admins have unrestricted access.
- */
 @Injectable()
 export class TicketsService {
   constructor(
@@ -29,29 +10,30 @@ export class TicketsService {
     private readonly ticketsRepository: Repository<Ticket>,
   ) {}
 
-  //Nadia
-async findOne(id: number): Promise<Ticket | null> {
-  return await this.ticketsRepository.findOne({
-    where: { id },
-    relations: { customer: true, assignee: true },
-  });
-}
+  async findOne(id: number): Promise<Ticket | null> {
+    return await this.ticketsRepository.findOne({
+      where: { id },
+      relations: { customer: true, assignee: true },
+    });
+  }
+
   async assign(
-  ticketId: number,
-  assigneeId: number,
-): Promise<{ ticket: Ticket; wasReassigned: boolean; previousAssigneeId: number | null } | null> {
-  const ticket = await this.findOne(ticketId);
-  if (!ticket) return null;
+    ticketId: number,
+    assigneeId: number,
+  ): Promise<{ ticket: Ticket; wasReassigned: boolean; previousAssigneeId: number | null } | null> {
+    const ticket = await this.findOne(ticketId);
+    if (!ticket) return null;
 
-  const previousAssigneeId = (ticket as any).assigneeId ?? null;
-  const wasReassigned = previousAssigneeId !== null && previousAssigneeId !== assigneeId;
+    const previousAssigneeId = ticket.assignee?.id ?? null;
+    const wasReassigned = previousAssigneeId !== null && previousAssigneeId !== assigneeId;
 
-  (ticket as any).assigneeId = assigneeId;
-  ticket.status = TicketStatus.InProgress;
-  const saved = await this.ticketsRepository.save(ticket);
+    ticket.assignee = { id: assigneeId } as any;
+    ticket.status = TicketStatus.InProgress;
+    const saved = await this.ticketsRepository.save(ticket);
 
-  return { ticket: saved, wasReassigned, previousAssigneeId };
-}
+    return { ticket: saved, wasReassigned, previousAssigneeId };
+  }
+
   async close(ticketId: number): Promise<Ticket | null> {
     const ticket = await this.findOne(ticketId);
     if (!ticket) return null;
@@ -59,18 +41,111 @@ async findOne(id: number): Promise<Ticket | null> {
     return await this.ticketsRepository.save(ticket);
   }
 
-  /**  flexible filtering. */
-  async search(status?: string, priority?: string): Promise<Ticket[]> {
-    const query = this.ticketsRepository
+  /** Columns allowed for sorting — whitelisted to avoid invalid column errors. */
+  private static readonly SORTABLE_COLUMNS = [
+    'createdAt',
+    'updatedAt',
+    'priority',
+    'status',
+  ];
+
+  
+  async search(
+    status?: string,
+    priority?: string,
+    sortBy?: string,
+    order?: 'ASC' | 'DESC',
+    page = 1,
+    limit = 10,
+  ): Promise<{
+    data: Ticket[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
+    const safePage = page > 0 ? page : 1;
+    const safeLimit = limit > 0 ? Math.min(limit, 100) : 10;
+    const sortColumn = TicketsService.SORTABLE_COLUMNS.includes(sortBy ?? '')
+      ? sortBy!
+      : 'createdAt';
+
+    const [data, total] = await this.ticketsRepository.findAndCount({
+      where: {
+        ...(status && { status: status as TicketStatus }),
+        ...(priority && { priority: priority as TicketPriority }),
+      },
+      relations: { customer: true, assignee: true },
+      order: { [sortColumn]: order === 'ASC' ? 'ASC' : 'DESC' },
+      skip: (safePage - 1) * safeLimit,
+      take: safeLimit,
+    });
+
+    return {
+      data,
+      total,
+      page: safePage,
+      limit: safeLimit,
+      totalPages: Math.ceil(total / safeLimit),
+    };
+  }
+
+  
+  async escalateTicket(ticketId: number): Promise<Ticket | null> {
+    const ticket = await this.findOne(ticketId);
+    if (!ticket) return null;
+
+    ticket.priority = TicketPriority.Urgent;
+    ticket.isEscalated = true;
+    ticket.escalatedAt = new Date();
+
+    return await this.ticketsRepository.save(ticket);
+  }
+
+  
+  async acceptTicket(
+    ticketId: number,
+    managerId: number,
+  ): Promise<{ ticket: Ticket; wasReassigned: boolean; previousAssigneeId: number | null } | null> {
+    return await this.assign(ticketId, managerId);
+  }
+
+  
+  async generateReport(): Promise<{
+    totalTickets: number;
+    escalatedCount: number;
+    byStatus: Record<string, number>;
+    byPriority: Record<string, number>;
+  }> {
+    const totalTickets = await this.ticketsRepository.count();
+    const escalatedCount = await this.ticketsRepository.count({
+      where: { isEscalated: true },
+    });
+
+    const statusRows = await this.ticketsRepository
       .createQueryBuilder('ticket')
-      .leftJoinAndSelect('ticket.customer', 'customer')
-      .leftJoinAndSelect('ticket.assignee', 'assignee');
+      .select('ticket.status', 'status')
+      .addSelect('COUNT(ticket.id)', 'count')
+      .groupBy('ticket.status')
+      .getRawMany();
 
-    if (status) query.andWhere('ticket.status = :status', { status });
-    if (priority) query.andWhere('ticket.priority = :priority', { priority });
+    const priorityRows = await this.ticketsRepository
+      .createQueryBuilder('ticket')
+      .select('ticket.priority', 'priority')
+      .addSelect('COUNT(ticket.id)', 'count')
+      .groupBy('ticket.priority')
+      .getRawMany();
 
-    return await query.getMany();
+    const byStatus: Record<string, number> = {};
+    for (const row of statusRows) {
+      byStatus[row.status] = Number(row.count);
+    }
+
+    const byPriority: Record<string, number> = {};
+    for (const row of priorityRows) {
+      byPriority[row.priority] = Number(row.count);
+    }
+
+    return { totalTickets, escalatedCount, byStatus, byPriority };
   }
 }
-
-//nADIA

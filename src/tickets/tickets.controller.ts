@@ -1,5 +1,3 @@
-
-//Nadia
 import {
   Body,
   Controller,
@@ -15,12 +13,66 @@ import { TicketsService } from './tickets.service';
 import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Tickets')
 @Controller('tickets')
 export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
+
+  @ApiOperation({ summary: 'Generate a basic ticket-count report' })
+  @Roles(Role.Manager)
+  @Get('reports/summary')
+  async generateReport() {
+    try {
+      return await this.ticketsService.generateReport();
+    } catch (error) {
+      throw new HttpException(
+        { status: HttpStatus.BAD_REQUEST, error: error.message || 'Report generation failed' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  @ApiOperation({ summary: 'Search tickets with sorting and pagination' })
+  @ApiQuery({ name: 'status', required: false, example: 'Open' })
+  @ApiQuery({ name: 'priority', required: false, example: 'High' })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    example: 'createdAt',
+    description: 'createdAt | updatedAt | priority | status',
+  })
+  @ApiQuery({ name: 'order', required: false, example: 'DESC' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  @Get()
+  async search(
+    @Query('status') status?: string,
+    @Query('priority') priority?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('order') order?: 'ASC' | 'DESC',
+    @Query('page', new ParseIntPipe({ optional: true })) page?: number,
+    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+  ) {
+    try {
+      return await this.ticketsService.search(
+        status,
+        priority,
+        sortBy,
+        order,
+        page,
+        limit,
+      );
+    } catch (error) {
+      throw new HttpException(
+        { status: HttpStatus.BAD_REQUEST, error: 'Search failed' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
 
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {
@@ -38,18 +90,6 @@ export class TicketsController {
     }
   }
 
-  @Roles(Role.Admin, Role.Manager)
-<<<<<<< HEAD
-@Patch(':id/assign')
-async assign(
-  @Param('id', ParseIntPipe) id: number,
-  @Body() dto: AssignTicketDto,
-) {
-  try {
-    const result = await this.ticketsService.assign(id, dto.assigneeId);
-    if (!result) {
-      throw new HttpException('Ticket not found', HttpStatus.NOT_FOUND);
-=======
   @ApiOperation({ summary: 'Assign a ticket to another user' })
   @ApiBody({
     type: AssignTicketDto,
@@ -61,36 +101,72 @@ async assign(
       },
     },
   })
+  @Roles(Role.Admin, Role.Manager)
   @Patch(':id/assign')
   async assign(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AssignTicketDto,
   ) {
     try {
-      const ticket = await this.ticketsService.assign(id, dto.assigneeId);
+      const result = await this.ticketsService.assign(id, dto.assigneeId);
+      if (!result) {
+        throw new HttpException('Ticket not found', HttpStatus.NOT_FOUND);
+      }
+      return {
+        ...result.ticket,
+        action: result.wasReassigned ? 'reassigned' : 'assigned',
+        previousAssigneeId: result.previousAssigneeId,
+      };
+    } catch (error) {
+      throw new HttpException(
+        { status: HttpStatus.BAD_REQUEST, error: error.message || 'Assignment failed' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  @ApiOperation({ summary: 'Manager accepts a ticket by self-assigning it' })
+  @Roles(Role.Manager)
+  @Patch(':id/accept')
+  async accept(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    try {
+      const result = await this.ticketsService.acceptTicket(id, user.sub);
+      if (!result) {
+        throw new HttpException('Ticket not found', HttpStatus.NOT_FOUND);
+      }
+      return {
+        ...result.ticket,
+        action: result.wasReassigned ? 'reassigned' : 'accepted',
+        previousAssigneeId: result.previousAssigneeId,
+      };
+    } catch (error) {
+      throw new HttpException(
+        { status: HttpStatus.BAD_REQUEST, error: error.message || 'Accept failed' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  @ApiOperation({ summary: 'Escalate a critical ticket to Urgent priority' })
+  @Roles(Role.Manager)
+  @Patch(':id/escalate')
+  async escalate(@Param('id', ParseIntPipe) id: number) {
+    try {
+      const ticket = await this.ticketsService.escalateTicket(id);
       if (!ticket) {
         throw new HttpException('Ticket not found', HttpStatus.NOT_FOUND);
       }
       return ticket;
     } catch (error) {
       throw new HttpException(
-        { status: HttpStatus.BAD_REQUEST, error: error.message || 'Assignment failed' },
+        { status: HttpStatus.BAD_REQUEST, error: error.message || 'Escalation failed' },
         HttpStatus.BAD_REQUEST,
       );
->>>>>>> 452689b3039703c5a031d15be13d37efd0074a22
     }
-    return {
-      ...result.ticket,
-      action: result.wasReassigned ? 'reassigned' : 'assigned',
-      previousAssigneeId: result.previousAssigneeId,
-    };
-  } catch (error) {
-    throw new HttpException(
-      { status: HttpStatus.BAD_REQUEST, error: error.message || 'Assignment failed' },
-      HttpStatus.BAD_REQUEST,
-    );
   }
-}
 
   @Roles(Role.Manager)
   @Patch(':id/close')
@@ -108,23 +184,6 @@ async assign(
       );
     }
   }
-
-  @ApiOperation({ summary: 'Search tickets by status or priority' })
-  @ApiQuery({ name: 'status', required: false, example: 'Open' })
-  @ApiQuery({ name: 'priority', required: false, example: 'High' })
-  @Get()
-  async search(
-    @Query('status') status?: string,
-    @Query('priority') priority?: string,
-  ) {
-    try {
-      return await this.ticketsService.search(status, priority);
-    } catch (error) {
-      throw new HttpException(
-        { status: HttpStatus.BAD_REQUEST, error: 'Search failed' },
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-  }
 }
+  
 //Nadia

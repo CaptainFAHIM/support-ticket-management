@@ -41,9 +41,15 @@ export class Ticket {
   @Column({ type: 'enum', enum: TicketPriority, default: TicketPriority.Medium })
   priority: TicketPriority;
 
+  @Column({ type: 'boolean', default: false })
+  isEscalated: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  escalatedAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
-
+  
   @UpdateDateColumn()
   updatedAt: Date;
 
