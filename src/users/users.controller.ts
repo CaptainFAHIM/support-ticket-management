@@ -10,6 +10,7 @@ import {
   ParseIntPipe,
   Patch,
   Query,
+  Req,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
@@ -22,6 +23,27 @@ import { Role } from '../common/enums/role.enum';
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @ApiOperation({
+  summary: 'Customer Dashboard',
+})
+
+//dashboard endpoint (mehrab)
+@Roles(Role.Customer)
+@Get('dashboard')
+async dashboard(@Req() req) {
+  try {
+    return await this.usersService.getCustomerDashboard(req.user.sub);
+  } catch (error) {
+    throw new HttpException(
+      {
+        status: HttpStatus.BAD_REQUEST,
+        error: error.message,
+      },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+}
 
   // ── Existing endpoints (Nadia) — Admin + Manager ───────────────────────────
 
@@ -167,4 +189,4 @@ export class UsersController {
       );
     }
   }
-}
+}

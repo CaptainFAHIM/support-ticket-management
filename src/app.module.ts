@@ -15,6 +15,9 @@ import { UsersModule } from './users/users.module';
 import { ProductsModule } from './products/products.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { CommentsModule } from './comments/comments.module';
+import { ProfileModule } from './profile/profile.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { MyTicketsModule } from './my-tickets/my-tickets.module';
 
 // Entities
 import { User } from './users/entities/user.entity';
@@ -92,6 +95,9 @@ import { LoggingMiddleware } from './common/middleware/logging.middleware';
     ProductsModule,
     TicketsModule,
     CommentsModule,
+    ProfileModule, //mehrab
+    DashboardModule, //mehrab
+    MyTicketsModule, //mehrab
   ],
 
   providers: [

@@ -3,14 +3,19 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { Role } from '../common/enums/role.enum';
+import { Ticket, TicketStatus } from '../tickets/entities/ticket.entity';
+
 
 //Nadia
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectRepository(User)
-    private readonly usersRepository: Repository<User>,
-  ) {}
+  @InjectRepository(User)
+  private readonly usersRepository: Repository<User>,
+
+  @InjectRepository(Ticket)
+  private readonly ticketRepository: Repository<Ticket>,
+) {}
 
   async createUser(data: {
     email: string;
@@ -126,6 +131,78 @@ export class UsersService {
     const user = await this.findUserById(id);
     await this.usersRepository.remove(user);
   }
-}
+
 
 //Nadia
+
+
+//mehrab -dashboard ticket
+
+async getCustomerDashboard(userId: number) {
+  const totalTickets = await this.ticketRepository.count({
+    where: {
+      customer: {
+        id: userId,
+      },
+    },
+  });
+
+  const openTickets = await this.ticketRepository.count({
+    where: {
+      customer: {
+        id: userId,
+      },
+      status: TicketStatus.Open,
+    },
+  });
+
+  const inProgressTickets = await this.ticketRepository.count({
+    where: {
+      customer: {
+        id: userId,
+      },
+      status: TicketStatus.InProgress,
+    },
+  });
+
+  const resolvedTickets = await this.ticketRepository.count({
+    where: {
+      customer: {
+        id: userId,
+      },
+      status: TicketStatus.Resolved,
+    },
+  });
+
+  const closedTickets = await this.ticketRepository.count({
+    where: {
+      customer: {
+        id: userId,
+      },
+      status: TicketStatus.Closed,
+    },
+  });
+
+  const recentTickets = await this.ticketRepository.find({
+    where: {
+      customer: {
+        id: userId,
+      },
+    },
+    order: {
+      createdAt: 'DESC',
+    },
+    take: 5,
+    relations: ['product'],
+  });
+
+  return {
+    totalTickets,
+    openTickets,
+    inProgressTickets,
+    resolvedTickets,
+    closedTickets,
+    recentTickets,
+  };
+}
+}
