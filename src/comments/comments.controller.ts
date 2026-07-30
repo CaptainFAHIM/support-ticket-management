@@ -12,7 +12,7 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
-import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CommentsService } from './comments.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
@@ -29,8 +29,13 @@ import type { JwtPayload } from '../common/interfaces/jwt-payload.interface';
  *   GET    /tickets/:ticketId/comments  → list comments for a ticket
  *   PATCH  /comments/:id               → edit a comment (author or Admin)
  *   DELETE /comments/:id               → delete a comment (author or Admin)
+ *
+ * Note: author/Admin permission is enforced inside CommentsService
+ * (updateComment / deleteComment), not via @Roles(), since it depends
+ * on comment ownership rather than a fixed role.
  */
 @ApiTags('Comments')
+@ApiBearerAuth()
 @Controller()
 export class CommentsController {
   constructor(private readonly commentsService: CommentsService) {}

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
@@ -60,6 +60,49 @@ export class UsersService {
       .addSelect('user.refreshToken')
       .where('user.id = :id', { id })
       .getOne();
+  }
+
+  async findByIdWithPassword(id: number): Promise<User | null> {
+    return await this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .where('user.id = :id', { id })
+      .getOne();
+  }
+
+  async updateProfile(
+    id: number,
+    dto: {
+      email?: string;
+      name?: string;
+      contactNumber?: string;
+      profilePicture?: string;
+      address?: string;
+    },
+  ): Promise<User> {
+    const user = await this.findById(id);
+
+    const changes: Partial<User> = {};
+
+    if (dto.email !== undefined && dto.email !== user.email) {
+      const existing = await this.findByEmail(dto.email);
+      if (existing && existing.id !== id) {
+        throw new ConflictException('Email already in use');
+      }
+      changes.email = dto.email;
+    }
+
+    if (dto.name !== undefined) changes.name = dto.name;
+    if (dto.contactNumber !== undefined) changes.contactNumber = dto.contactNumber;
+    if (dto.profilePicture !== undefined) changes.profilePicture = dto.profilePicture;
+    if (dto.address !== undefined) changes.address = dto.address;
+
+    if (Object.keys(changes).length === 0) {
+      return user;
+    }
+
+    await this.usersRepository.update(id, changes);
+    return await this.findById(id);
   }
 
   async findCustomerById(id: number): Promise<User | null> {

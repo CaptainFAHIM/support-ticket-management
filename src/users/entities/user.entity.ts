@@ -46,6 +46,9 @@ export class User {
   @Column({ type: 'varchar', length: 255, nullable: true })
   profilePicture: string | null;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  address: string | null;
+
 
   @CreateDateColumn()
   createdAt: Date;

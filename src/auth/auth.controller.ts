@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   HttpCode,
+  HttpException,
   HttpStatus,
   Param,
   ParseIntPipe,
@@ -19,12 +20,20 @@ import { Public } from '../common/decorators/public.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { JwtRefreshGuard } from '../common/guards/jwt-refresh.guard';
-import { ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Get, Patch } from '@nestjs/common';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { UsersService } from 'src/users/users.service';
+
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly usersService: UsersService,
+  ) {}
 
   @Public()
   @ApiOperation({ summary: 'Register a new account' })
@@ -75,7 +84,6 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
-  /** Exchanges a valid refresh token for a new access + refresh token pair. */
   @Public()
   @ApiOperation({ summary: 'Refresh access token using a refresh token' })
   @ApiBody({
@@ -123,10 +131,76 @@ export class AuthController {
     return this.authService.applyForManager(dto);
   }
 
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Approve a pending manager application (Admin only)' })
   @Roles(Role.Admin)
   @Post('approve-manager/:userId')
   async approveManager(@Param('userId', ParseIntPipe) userId: number) {
     return this.authService.approveManager(userId);
+  }
+
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get the logged-in user's profile" })
+  @Get('profile')
+  async getProfile(@Req() req) {
+    return this.authService.getProfile(req.user.sub);
+  }
+
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Update the logged-in user's profile" })
+  @ApiBody({
+    type: UpdateProfileDto,
+    schema: {
+      example: {
+        name: 'Nadia Sultana',
+        contactNumber: '+8801712345678',
+        profilePicture: 'https://example.com/photo.jpg',
+        address: 'Dhaka, Bangladesh',
+      },
+    },
+    examples: {
+      default: {
+        value: {
+          name: 'Nadia Sultana',
+          contactNumber: '+8801712345678',
+          profilePicture: 'https://example.com/photo.jpg',
+          address: 'Dhaka, Bangladesh',
+        },
+      },
+    },
+  })
+  @Patch('profile')
+  async updateProfile(@Req() req, @Body() dto: UpdateProfileDto) {
+    const user = await this.usersService.updateProfile(req.user.sub, dto);
+    return user;
+  }
+
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Change the logged-in user's password" })
+  @ApiBody({
+    type: ChangePasswordDto,
+    schema: {
+      example: {
+        currentPassword: 'OldPassword123',
+        newPassword: 'NewPassword456',
+      },
+    },
+    examples: {
+      default: {
+        value: {
+          currentPassword: 'OldPassword123',
+          newPassword: 'NewPassword456',
+        },
+      },
+    },
+  })
+  @Patch('change-password')
+  async changePassword(@Req() req, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(
+      req.user.sub,
+      dto.currentPassword,
+      dto.newPassword,
+    );
   }
 }
 //Nadia
