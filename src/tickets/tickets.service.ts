@@ -1,14 +1,18 @@
+//Nadia
+
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Ticket, TicketStatus, TicketPriority } from './entities/ticket.entity';
-
+import { MailerService } from '@nestjs-modules/mailer';
 @Injectable()
 export class TicketsService {
   constructor(
     @InjectRepository(Ticket)
     private readonly ticketsRepository: Repository<Ticket>,
+    private readonly mailerService: MailerService,
   ) {}
+  
 
   async findOne(id: number): Promise<Ticket | null> {
     return await this.ticketsRepository.findOne({
@@ -17,31 +21,51 @@ export class TicketsService {
     });
   }
 
-  async assign(
-    ticketId: number,
-    assigneeId: number,
-  ): Promise<{ ticket: Ticket; wasReassigned: boolean; previousAssigneeId: number | null } | null> {
-    const ticket = await this.findOne(ticketId);
-    if (!ticket) return null;
+async close(ticketId: number): Promise<Ticket | null> {
+  const ticket = await this.findOne(ticketId);
+  if (!ticket) return null;
+  ticket.status = TicketStatus.Closed;
+  const saved = await this.ticketsRepository.save(ticket);
 
-    const previousAssigneeId = ticket.assignee?.id ?? null;
-    const wasReassigned = previousAssigneeId !== null && previousAssigneeId !== assigneeId;
-
-    ticket.assignee = { id: assigneeId } as any;
-    ticket.status = TicketStatus.InProgress;
-    const saved = await this.ticketsRepository.save(ticket);
-
-    return { ticket: saved, wasReassigned, previousAssigneeId };
+    if (saved.customer?.email) {
+      await this.mailerService.sendMail({
+        to: saved.customer.email,
+        subject: `Ticket #${saved.id} Resolved`,
+        text: `Your ticket "${saved.title}" has been resolved and closed.`,
+      });
+  }
+  return saved;
   }
 
-  async close(ticketId: number): Promise<Ticket | null> {
-    const ticket = await this.findOne(ticketId);
-    if (!ticket) return null;
-    ticket.status = TicketStatus.Closed;
-    return await this.ticketsRepository.save(ticket);
+ async assign(ticketId: number, assigneeId: number): Promise<{ ticket: any; wasReassigned: boolean; previousAssigneeId: number | null } | null> {
+
+  const ticket = await this.findOne(ticketId);
+  
+  if (!ticket) return null;
+
+  const previousAssigneeId = ticket.assignee?.id ?? null;
+  const wasReassigned = previousAssigneeId !== null && previousAssigneeId !== assigneeId;
+
+  
+  ticket.assignee = { id: assigneeId } as any; 
+  ticket.status = TicketStatus.InProgress;
+  
+  const saved = await this.ticketsRepository.save(ticket);
+
+ 
+  if (saved.customer?.email) {
+    await this.mailerService.sendMail({
+      to: saved.customer.email,
+      subject: `Ticket #${saved.id} Update`,
+      text: `A support manager has been assigned to your ticket "${saved.title}".`,
+    });
   }
 
-  /** Columns allowed for sorting — whitelisted to avoid invalid column errors. */
+  return { ticket: saved, wasReassigned, previousAssigneeId };
+}
+
+
+ 
   private static readonly SORTABLE_COLUMNS = [
     'createdAt',
     'updatedAt',
@@ -92,16 +116,24 @@ export class TicketsService {
 
   
   async escalateTicket(ticketId: number): Promise<Ticket | null> {
-    const ticket = await this.findOne(ticketId);
-    if (!ticket) return null;
+  const ticket = await this.findOne(ticketId);
+  if (!ticket) return null;
 
-    ticket.priority = TicketPriority.Urgent;
-    ticket.isEscalated = true;
-    ticket.escalatedAt = new Date();
+  ticket.priority = TicketPriority.Urgent;
+  ticket.isEscalated = true;
+  ticket.escalatedAt = new Date();
+  const saved = await this.ticketsRepository.save(ticket);
 
-    return await this.ticketsRepository.save(ticket);
+  if (saved.customer?.email) {
+    await this.mailerService.sendMail({
+      to: saved.customer.email,
+      subject: `Ticket #${saved.id} Escalated`,
+      text: `Your ticket "${saved.title}" has been marked as urgent and is being prioritized.`,
+    });
   }
 
+  return saved;
+}
   
   async acceptTicket(
     ticketId: number,
@@ -148,4 +180,36 @@ export class TicketsService {
 
     return { totalTickets, escalatedCount, byStatus, byPriority };
   }
+
+async getDashboard(managerId: number) {
+  const myTickets = await this.ticketsRepository.find({
+    where: { assignee: { id: managerId } } as any,
+    relations: { customer: true },
+  });
+
+  const statusRows = await this.ticketsRepository
+    .createQueryBuilder('ticket')
+    .select('ticket.status', 'status')
+    .addSelect('COUNT(ticket.id)', 'count')
+    .where('ticket.assigneeId = :managerId', { managerId })
+    .groupBy('ticket.status')
+    .getRawMany();
+
+  const byStatus: Record<string, number> = {};
+  for (const row of statusRows) {
+    byStatus[row.status] = Number(row.count);
+  }
+
+  return {
+    totalAssigned: myTickets.length,
+    byStatus,
+    tickets: myTickets.map((t) => ({
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      priority: t.priority,
+      customer: { id: (t.customer as any)?.id, email: (t.customer as any)?.email },
+    })),
+  };
+}
 }

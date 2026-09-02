@@ -1,3 +1,4 @@
+//Nadia
 import {
   Body,
   Controller,
@@ -8,6 +9,7 @@ import {
   ParseIntPipe,
   Patch,
   Query,
+  Req,
 } from '@nestjs/common';
 import { TicketsService } from './tickets.service';
 import { AssignTicketDto } from './dto/assign-ticket.dto';
@@ -15,9 +17,10 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../common/interfaces/jwt-payload.interface';
-import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Tickets')
+@ApiBearerAuth()
 @Controller('tickets')
 export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
@@ -36,7 +39,21 @@ export class TicketsController {
     }
   }
 
-  @ApiOperation({ summary: 'Search tickets with sorting and pagination' })
+  @ApiOperation({ summary: "Get the logged-in manager's ticket dashboard" })
+  @Roles(Role.Manager)
+  @Get('dashboard')
+  async getDashboard(@Req() req) {
+    try {
+      return await this.ticketsService.getDashboard(req.user.sub);
+    } catch (error) {
+      throw new HttpException(
+        { status: HttpStatus.BAD_REQUEST, error: 'Could not load dashboard' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  @ApiOperation({ summary: 'Search tickets with sorting and pagination (Admin/Manager only)' })
   @ApiQuery({ name: 'status', required: false, example: 'Open' })
   @ApiQuery({ name: 'priority', required: false, example: 'High' })
   @ApiQuery({
@@ -48,6 +65,7 @@ export class TicketsController {
   @ApiQuery({ name: 'order', required: false, example: 'DESC' })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 10 })
+  @Roles(Role.Admin, Role.Manager)
   @Get()
   async search(
     @Query('status') status?: string,
@@ -74,6 +92,8 @@ export class TicketsController {
     }
   }
 
+  @ApiOperation({ summary: 'Get a ticket by id (Admin/Manager only)' })
+  @Roles(Role.Admin, Role.Manager)
   @Get(':id')
   async findOne(@Param('id', ParseIntPipe) id: number) {
     try {
@@ -168,6 +188,7 @@ export class TicketsController {
     }
   }
 
+  @ApiOperation({ summary: 'Close a ticket' })
   @Roles(Role.Manager)
   @Patch(':id/close')
   async close(@Param('id', ParseIntPipe) id: number) {
@@ -185,5 +206,4 @@ export class TicketsController {
     }
   }
 }
-  
 //Nadia

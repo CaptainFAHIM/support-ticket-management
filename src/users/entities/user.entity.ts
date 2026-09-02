@@ -32,8 +32,23 @@ export class User {
   /**
    * Stores the currently valid refresh token
    */
- @Column({ type: 'varchar', nullable: true, select: false })
-refreshToken: string | null;
+  @Column({ type: 'varchar', nullable: true, select: false })
+  refreshToken: string | null;
+
+//mehrab
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  name: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  contactNumber: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  profilePicture: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  address: string | null;
+
 
   @CreateDateColumn()
   createdAt: Date;

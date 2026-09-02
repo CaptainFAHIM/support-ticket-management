@@ -10,8 +10,9 @@ import {
   ParseIntPipe,
   Patch,
   Query,
+  Req,
 } from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { UpdateCustomerDto } from './dto/updateCustomer.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
@@ -19,12 +20,34 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 
 @ApiTags('Users')
+@ApiBearerAuth()
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  // ── Existing endpoints (Nadia) — Admin + Manager ───────────────────────────
+  @ApiOperation({
+    summary: 'Customer Dashboard',
+  })
+  //dashboard endpoint (mehrab)
+  @Roles(Role.Customer)
+  @Get('dashboard')
+  async dashboard(@Req() req) {
+    try {
+      return await this.usersService.getCustomerDashboard(req.user.sub);
+    } catch (error) {
+      throw new HttpException(
+        {
+          status: HttpStatus.BAD_REQUEST,
+          error: error.message,
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
 
+  //nadia
+
+  @ApiOperation({ summary: 'List all customers (Admin/Manager only)' })
   @Roles(Role.Admin, Role.Manager)
   @Get('customers')
   async findAllCustomers() {
@@ -38,6 +61,7 @@ export class UsersController {
     }
   }
 
+  @ApiOperation({ summary: 'Get one customer by id (Admin/Manager only)' })
   @Roles(Role.Admin, Role.Manager)
   @Get('customers/:id')
   async findOneCustomer(@Param('id', ParseIntPipe) id: number) {
@@ -55,6 +79,7 @@ export class UsersController {
     }
   }
 
+  @ApiOperation({ summary: 'Update a customer (Admin/Manager only)' })
   @Roles(Role.Admin, Role.Manager)
   @Patch('customers/:id')
   async updateCustomer(
@@ -75,6 +100,7 @@ export class UsersController {
     }
   }
 
+  @ApiOperation({ summary: 'Delete a customer (Admin/Manager only)' })
   @Roles(Role.Admin, Role.Manager)
   @Delete('customers/:id')
   async removeCustomer(@Param('id', ParseIntPipe) id: number) {
@@ -167,4 +193,4 @@ export class UsersController {
       );
     }
   }
-}
+}

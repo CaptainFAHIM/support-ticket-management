@@ -76,11 +76,16 @@ export class AuthService {
         role: Role.Customer,
       });
 
-      await this.mailerService.sendMail({
-        to: user.email,
-        subject: 'Welcome to Helpdesk',
-        text: 'Your account has been created successfully.',
-      });
+      // Don't let a broken/misconfigured mail server block registration.
+      try {
+        await this.mailerService.sendMail({
+          to: user.email,
+          subject: 'Welcome to Helpdesk',
+          text: 'Your account has been created successfully.',
+        });
+      } catch (mailError) {
+        console.error('Failed to send welcome email:', mailError.message);
+      }
 
       return this.issueTokens(user);
     } catch (error) {
@@ -154,6 +159,54 @@ export class AuthService {
     }
   }
 
+  async getProfile(userId: number) {
+    const user = await this.usersService.findById(userId);
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      contactNumber: user.contactNumber,
+      profilePicture: user.profilePicture,
+      address: user.address,
+      createdAt: user.createdAt,
+    };
+  }
+
+  async changePassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    try {
+      const user = await this.usersService.findByIdWithPassword(userId);
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      const passwordMatches = await bcrypt.compare(
+        currentPassword,
+        user.password,
+      );
+      if (!passwordMatches) {
+        throw new UnauthorizedException('Current password is incorrect');
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await this.usersService.updatePassword(userId, hashedPassword);
+
+      return { message: 'Password changed successfully' };
+    } catch (error) {
+      throw new HttpException(
+        {
+          status: error.status ?? HttpStatus.BAD_REQUEST,
+          error: error.message || 'Could not change password',
+        },
+        error.status ?? HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
   async approveManager(userId: number) {
     try {
       const user = await this.usersService.findById(userId);
@@ -168,11 +221,15 @@ export class AuthService {
       const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
       await this.usersService.updatePassword(user.id, hashedPassword);
 
-      await this.mailerService.sendMail({
-        to: user.email,
-        subject: 'Manager Application Approved',
-        text: `Your temporary password is: ${temporaryPassword}. Please log in and change it.`,
-      });
+      try {
+        await this.mailerService.sendMail({
+          to: user.email,
+          subject: 'Manager Application Approved',
+          text: `Your temporary password is: ${temporaryPassword}. Please log in and change it.`,
+        });
+      } catch (mailError) {
+        console.error('Failed to send manager approval email:', mailError.message);
+      }
 
       return { message: 'Manager approved and notified by email' };
     } catch (error) {
