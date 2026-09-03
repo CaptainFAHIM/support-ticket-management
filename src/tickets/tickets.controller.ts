@@ -26,7 +26,7 @@ export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
 
   @ApiOperation({ summary: 'Generate a basic ticket-count report' })
-  @Roles(Role.Manager)
+  @Roles(Role.Admin, Role.Manager)
   @Get('reports/summary')
   async generateReport() {
     try {
