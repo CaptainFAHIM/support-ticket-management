@@ -146,7 +146,7 @@ export class TicketsController {
   }
 
   @ApiOperation({ summary: 'Manager accepts a ticket by self-assigning it' })
-  @Roles(Role.Manager)
+  @Roles(Role.Admin, Role.Manager)
   @Patch(':id/accept')
   async accept(
     @Param('id', ParseIntPipe) id: number,
@@ -171,7 +171,7 @@ export class TicketsController {
   }
 
   @ApiOperation({ summary: 'Escalate a critical ticket to Urgent priority' })
-  @Roles(Role.Manager)
+  @Roles(Role.Admin, Role.Manager)
   @Patch(':id/escalate')
   async escalate(@Param('id', ParseIntPipe) id: number) {
     try {
@@ -189,7 +189,7 @@ export class TicketsController {
   }
 
   @ApiOperation({ summary: 'Close a ticket' })
-  @Roles(Role.Manager)
+  @Roles(Role.Admin, Role.Manager)
   @Patch(':id/close')
   async close(@Param('id', ParseIntPipe) id: number) {
     try {
