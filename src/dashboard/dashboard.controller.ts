@@ -1,4 +1,4 @@
-//mehrab
+
 import { Controller, Get, HttpException, HttpStatus } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DashboardService } from './dashboard.service';
@@ -26,6 +26,48 @@ export class DashboardController {
         {
           status: HttpStatus.BAD_REQUEST,
           error: error.message || 'Could not load dashboard',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  //Nadia
+  @ApiOperation({
+    summary:
+      'Manager dashboard: ticket stats, weekly volume, status breakdown, recent tickets and team size',
+  })
+  @Roles(Role.Manager, Role.Admin)
+  @Get('manager')
+  async getManagerDashboard(@CurrentUser() user: JwtPayload) {
+    try {
+      return await this.dashboardService.getManagerDashboard(user.sub);
+    } catch (error) {
+      throw new HttpException(
+        {
+          status: HttpStatus.BAD_REQUEST,
+          error: error.message || 'Could not load dashboard',
+        },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  //Nadia
+  @ApiOperation({
+    summary:
+      'Analytics page: monthly created/resolved trend (6 months) plus a priority × status deep dive',
+  })
+  @Roles(Role.Manager, Role.Admin)
+  @Get('analytics')
+  async getAnalytics() {
+    try {
+      return await this.dashboardService.getAnalytics();
+    } catch (error) {
+      throw new HttpException(
+        {
+          status: HttpStatus.BAD_REQUEST,
+          error: error.message || 'Could not load analytics',
         },
         HttpStatus.BAD_REQUEST,
       );

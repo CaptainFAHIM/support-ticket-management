@@ -47,6 +47,16 @@ export class Ticket {
   @Column({ type: 'timestamp', nullable: true })
   escalatedAt: Date | null;
 
+  
+  @Column({ type: 'smallint', nullable: true })
+  rating: number | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  ratingComment: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  ratedAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
   

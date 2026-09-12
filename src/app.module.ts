@@ -1,4 +1,3 @@
-
 import {
   Module,
   NestModule,
@@ -18,6 +17,7 @@ import { CommentsModule } from './comments/comments.module';
 import { ProfileModule } from './profile/profile.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { MyTicketsModule } from './my-tickets/my-tickets.module';
+import { AssistantModule } from './managerAss/assistant.module';
 
 // Entities
 import { User } from './users/entities/user.entity';
@@ -84,6 +84,7 @@ import { LoggingMiddleware } from './common/middleware/logging.middleware';
     ProfileModule,
     DashboardModule,
     MyTicketsModule,
+    AssistantModule,
   ],
 
   providers: [

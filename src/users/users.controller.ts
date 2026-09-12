@@ -138,10 +138,24 @@ export class UsersController {
       );
     }
   }
+  @ApiOperation({
+    summary:
+      'Team overview with workload (Manager + Admin): who is assigned what, and how much they have resolved',
+  })
+  @Roles(Role.Admin, Role.Manager)
+  @Get('team')
+  async getTeamOverview() {
+    try {
+      return await this.usersService.getTeamOverview();
+    } catch (error) {
+      throw new HttpException(
+        { status: HttpStatus.BAD_REQUEST, error: error.message || 'Could not fetch team overview' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
 
-  /**
-   * Get any user by ID regardless of role.
-   */
+  
   @ApiOperation({ summary: 'Get any user by ID (Admin only)' })
   @Roles(Role.Admin)
   @Get(':id')
@@ -156,9 +170,7 @@ export class UsersController {
     }
   }
 
-  /**
-   * Change the role of any user.
-   */
+  
   @ApiOperation({ summary: "Change a user's role (Admin only)" })
   @Roles(Role.Admin)
   @Patch(':id/role')
@@ -176,9 +188,7 @@ export class UsersController {
     }
   }
 
-  /**
-   * Hard-delete any user.
-   */
+  
   @ApiOperation({ summary: 'Hard-delete any user (Admin only)' })
   @Roles(Role.Admin)
   @HttpCode(HttpStatus.NO_CONTENT)

@@ -175,77 +175,129 @@ export class UsersService {
     await this.usersRepository.remove(user);
   }
 
+  // ── Team Management (Manager + Admin) ───────────────────────────────────
+  // Nadia — used by the "Team Management" page in the manager dashboard.
+  /**
+   * List everyone who can be assigned tickets (Manager + Admin), each with
+   * their current workload. Available to Manager, not just Admin — unlike
+   * the plain findAll() above which stays Admin-only.
+   */
+  async getTeamOverview(): Promise<
+    Array<{
+      id: number;
+      name: string | null;
+      email: string;
+      role: Role;
+      assignedTickets: number;
+      inProgressTickets: number;
+      resolvedTickets: number;
+    }>
+  > {
+    const staff = await this.usersRepository.find({
+      where: [{ role: Role.Manager }, { role: Role.Admin }],
+      order: { createdAt: 'ASC' },
+    });
 
-//Nadia
+    return Promise.all(
+      staff.map(async (member) => {
+        const [assignedTickets, inProgressTickets, resolvedTickets] =
+          await Promise.all([
+            this.ticketRepository.count({
+              where: { assignee: { id: member.id } },
+            }),
+            this.ticketRepository.count({
+              where: {
+                assignee: { id: member.id },
+                status: TicketStatus.InProgress,
+              },
+            }),
+            this.ticketRepository.count({
+              where: {
+                assignee: { id: member.id },
+                status: TicketStatus.Resolved,
+              },
+            }),
+          ]);
 
+        return {
+          id: member.id,
+          name: member.name,
+          email: member.email,
+          role: member.role,
+          assignedTickets,
+          inProgressTickets,
+          resolvedTickets,
+        };
+      }),
+    );
+  }
 
-//mehrab -dashboard ticket
-
-async getCustomerDashboard(userId: number) {
-  const totalTickets = await this.ticketRepository.count({
-    where: {
-      customer: {
-        id: userId,
+  //mehrab -dashboard ticket
+  async getCustomerDashboard(userId: number) {
+    const totalTickets = await this.ticketRepository.count({
+      where: {
+        customer: {
+          id: userId,
+        },
       },
-    },
-  });
+    });
 
-  const openTickets = await this.ticketRepository.count({
-    where: {
-      customer: {
-        id: userId,
+    const openTickets = await this.ticketRepository.count({
+      where: {
+        customer: {
+          id: userId,
+        },
+        status: TicketStatus.Open,
       },
-      status: TicketStatus.Open,
-    },
-  });
+    });
 
-  const inProgressTickets = await this.ticketRepository.count({
-    where: {
-      customer: {
-        id: userId,
+    const inProgressTickets = await this.ticketRepository.count({
+      where: {
+        customer: {
+          id: userId,
+        },
+        status: TicketStatus.InProgress,
       },
-      status: TicketStatus.InProgress,
-    },
-  });
+    });
 
-  const resolvedTickets = await this.ticketRepository.count({
-    where: {
-      customer: {
-        id: userId,
+    const resolvedTickets = await this.ticketRepository.count({
+      where: {
+        customer: {
+          id: userId,
+        },
+        status: TicketStatus.Resolved,
       },
-      status: TicketStatus.Resolved,
-    },
-  });
+    });
 
-  const closedTickets = await this.ticketRepository.count({
-    where: {
-      customer: {
-        id: userId,
+    const closedTickets = await this.ticketRepository.count({
+      where: {
+        customer: {
+          id: userId,
+        },
+        status: TicketStatus.Closed,
       },
-      status: TicketStatus.Closed,
-    },
-  });
+    });
 
-  const recentTickets = await this.ticketRepository.find({
-    where: {
-      customer: {
-        id: userId,
+    const recentTickets = await this.ticketRepository.find({
+      where: {
+        customer: {
+          id: userId,
+        },
       },
-    },
-    order: {
-      createdAt: 'DESC',
-    },
-    take: 5,
-    relations: ['product'],
-  });
+      order: {
+        createdAt: 'DESC',
+      },
+      take: 5,
+      relations: ['product'],
+    });
 
-  return {
-    totalTickets,
-    openTickets,
-    inProgressTickets,
-    resolvedTickets,
-    closedTickets,
-    recentTickets,
-  };
-}
+    return {
+      totalTickets,
+      openTickets,
+      inProgressTickets,
+      resolvedTickets,
+      closedTickets,
+      recentTickets,
+    };
+  }
 }

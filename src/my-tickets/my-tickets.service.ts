@@ -1,4 +1,4 @@
-//mehrab
+
 import {
   BadRequestException,
   Injectable,
@@ -15,6 +15,7 @@ import { Product } from '../products/entities/product.entity';
 import { CreateMyTicketDto } from './dto/create-my-ticket.dto';
 import { UpdateMyTicketDto } from './dto/update-my-ticket.dto';
 import { QueryMyTicketsDto } from './dto/query-my-tickets.dto';
+import { RateTicketDto } from './dto/rate-ticket.dto';
 
 @Injectable()
 export class MyTicketsService {
@@ -128,5 +129,33 @@ export class MyTicketsService {
     }
 
     await this.ticketsRepository.remove(ticket);
+  }
+
+  /**
+   * Customer rates a ticket (1-5) once it's Resolved or Closed.
+   * Re-submitting overwrites the previous rating/comment.
+   */
+  async rateTicket(
+    userId: number,
+    ticketId: number,
+    dto: RateTicketDto,
+  ): Promise<Ticket> {
+    const ticket = await this.findOwnedTicket(ticketId, userId);
+
+    if (
+      ticket.status !== TicketStatus.Resolved &&
+      ticket.status !== TicketStatus.Closed
+    ) {
+      throw new BadRequestException(
+        `Ticket cannot be rated because its status is "${ticket.status}". Only Resolved or Closed tickets can be rated.`,
+      );
+    }
+
+    ticket.rating = dto.rating;
+    ticket.ratingComment = dto.comment ?? null;
+    ticket.ratedAt = new Date();
+
+    await this.ticketsRepository.save(ticket);
+    return await this.findOwnedTicket(ticketId, userId);
   }
 }

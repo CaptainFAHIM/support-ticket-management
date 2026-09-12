@@ -1,4 +1,4 @@
-//mehrab
+
 import {
   Body,
   Controller,
@@ -18,6 +18,7 @@ import { MyTicketsService } from './my-tickets.service';
 import { CreateMyTicketDto } from './dto/create-my-ticket.dto';
 import { UpdateMyTicketDto } from './dto/update-my-ticket.dto';
 import { QueryMyTicketsDto } from './dto/query-my-tickets.dto';
+import { RateTicketDto } from './dto/rate-ticket.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -123,6 +124,29 @@ export class MyTicketsController {
         {
           status: error.status ?? HttpStatus.BAD_REQUEST,
           error: error.message || 'Could not delete ticket',
+        },
+        error.status ?? HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  @ApiOperation({
+    summary: 'Rate a Resolved or Closed ticket (1-5) with an optional comment',
+  })
+  @ApiBody({ type: RateTicketDto })
+  @Patch(':id/rating')
+  async rate(
+    @CurrentUser() user: JwtPayload,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: RateTicketDto,
+  ) {
+    try {
+      return await this.myTicketsService.rateTicket(user.sub, id, dto);
+    } catch (error) {
+      throw new HttpException(
+        {
+          status: error.status ?? HttpStatus.BAD_REQUEST,
+          error: error.message || 'Could not submit rating',
         },
         error.status ?? HttpStatus.BAD_REQUEST,
       );
