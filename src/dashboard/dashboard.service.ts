@@ -1,4 +1,3 @@
-
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -20,15 +19,12 @@ export class DashboardService {
     private readonly usersRepository: Repository<User>,
   ) {}
 
-  
-  //Nadia
   private static changePct(current: number, previous: number): number {
     if (previous === 0) return current > 0 ? 100 : 0;
     return Math.round(((current - previous) / previous) * 100);
   }
 
   async getManagerDashboard(managerId: number) {
-    //Nadia
     const manager = await this.usersRepository.findOne({
       where: { id: managerId },
     });
@@ -40,7 +36,6 @@ export class DashboardService {
     const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
-    // ── Headline stats (this-month vs last-month) ──────────────────────────
     const [
       totalTickets,
       totalThisMonth,
@@ -132,8 +127,7 @@ export class DashboardService {
       },
     };
 
-    // ── Ticket volume for the current week (Mon–Sun), by creation day ──────
-    const dayOfWeek = now.getDay(); // 0 = Sun
+    const dayOfWeek = now.getDay();
     const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     const monday = new Date(now);
     monday.setHours(0, 0, 0, 0);
@@ -157,7 +151,6 @@ export class DashboardService {
       count: countsByDay[day] ?? 0,
     }));
 
-    // ── Ticket status breakdown (for the donut chart) ──────────────────────
     const statusRows = await this.ticketsRepository
       .createQueryBuilder('ticket')
       .select('ticket.status', 'status')
@@ -173,7 +166,6 @@ export class DashboardService {
       byStatus[row.status] = Number(row.count);
     }
 
-    // UI label mapping: "Open" tickets are shown as "New" on the dashboard.
     const ticketStatusBreakdown = [
       { status: 'New', count: byStatus[TicketStatus.Open] },
       { status: 'InProgress', count: byStatus[TicketStatus.InProgress] },
@@ -181,9 +173,8 @@ export class DashboardService {
       { status: 'Closed', count: byStatus[TicketStatus.Closed] },
     ];
 
-    // ── Recent tickets ──────────────────────────────────────────────────────
     const recentTicketsRaw = await this.ticketsRepository.find({
-      relations: { customer: true },
+      relations: { customer: true, assignee: true },
       order: { createdAt: 'DESC' },
       take: 5,
     });
@@ -192,20 +183,21 @@ export class DashboardService {
       title: t.title,
       customerName:
         (t.customer as any)?.name ?? (t.customer as any)?.email ?? 'Unknown',
+      assigneeName:
+        (t.assignee as any)?.name ?? (t.assignee as any)?.email ?? 'Unassigned',
       status: t.status,
       priority: t.priority,
       createdAt: t.createdAt,
     }));
 
-    // ── Team size: everyone who can be assigned tickets ─────────────────────
+    const totalCustomers = await this.usersRepository.count({
+      where: { role: Role.Customer },
+    });
+
     const teamMembersCount = await this.usersRepository.count({
       where: [{ role: Role.Manager }, { role: Role.Admin }],
     });
 
-    // ── Avg response time: approximated as time from creation to the last
-    // update, for tickets that have moved past "Open". There's no dedicated
-    // "first response" timestamp in the schema, so this is an approximation,
-    // not an exact first-response metric. ──────────────────────────────────
     const avgResponseRow = await this.ticketsRepository
       .createQueryBuilder('ticket')
       .select(
@@ -221,9 +213,6 @@ export class DashboardService {
     const avgResponseTimeMinutes =
       avgResponseSeconds !== null ? Math.round(avgResponseSeconds / 60) : null;
 
-    // ── Customer satisfaction: overall average + last-6-months trend ───────
-    // Based on the `rating` (1-5) customers submit via PATCH
-    // /my/tickets/:id/rating after their ticket is Resolved/Closed.
     const overallRatingRow = await this.ticketsRepository
       .createQueryBuilder('ticket')
       .select('AVG(ticket.rating)', 'avgRating')
@@ -253,8 +242,6 @@ export class DashboardService {
       .orderBy("TO_CHAR(ticket.ratedAt, 'YYYY-MM')", 'ASC')
       .getRawMany();
 
-    // Build a full 6-month scaffold (oldest → newest) so months with no
-    // ratings yet still show up as 0 instead of just disappearing.
     const monthlyRatingByKey: Record<string, number> = {};
     for (const row of monthlyRatingRows) {
       monthlyRatingByKey[row.monthKey] =
@@ -289,6 +276,7 @@ export class DashboardService {
       ticketStatusBreakdown,
       recentTickets,
       teamMembersCount,
+      totalCustomers,
       avgResponseTimeMinutes,
       customerSatisfaction,
     };
@@ -370,15 +358,9 @@ export class DashboardService {
     };
   }
 
-  /**
-   * Analytics page: monthly created/resolved trend (last 6 months) plus a
-   * priority × status deep-dive. Org-wide — not scoped to one manager.
-   */
-  //Nadia
   async getAnalytics() {
     const now = new Date();
 
-    // ── Monthly trend: tickets created vs resolved, last 6 months ──────────
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
     const createdRows = await this.ticketsRepository
@@ -414,7 +396,6 @@ export class DashboardService {
       });
     }
 
-    // ── Priority × Status deep dive ─────────────────────────────────────────
     const matrixRows = await this.ticketsRepository
       .createQueryBuilder('ticket')
       .select('ticket.priority', 'priority')
