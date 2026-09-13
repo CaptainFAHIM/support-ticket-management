@@ -1,31 +1,48 @@
-//Nadia
-
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Ticket, TicketStatus, TicketPriority } from './entities/ticket.entity';
 import { MailerService } from '@nestjs-modules/mailer';
+
 @Injectable()
 export class TicketsService {
   constructor(
     @InjectRepository(Ticket)
     private readonly ticketsRepository: Repository<Ticket>,
+
     private readonly mailerService: MailerService,
   ) {}
-  
+
+  // =========================
+  // GET SINGLE TICKET
+  // =========================
 
   async findOne(id: number): Promise<Ticket | null> {
     return await this.ticketsRepository.findOne({
       where: { id },
-      relations: { customer: true, assignee: true },
+
+      relations: {
+        customer: true,
+        assignee: true,
+        product: true,
+      },
     });
   }
 
-async close(ticketId: number): Promise<Ticket | null> {
-  const ticket = await this.findOne(ticketId);
-  if (!ticket) return null;
-  ticket.status = TicketStatus.Closed;
-  const saved = await this.ticketsRepository.save(ticket);
+  // =========================
+  // CLOSE TICKET
+  // =========================
+
+  async close(ticketId: number): Promise<Ticket | null> {
+    const ticket = await this.findOne(ticketId);
+
+    if (!ticket) {
+      return null;
+    }
+
+    ticket.status = TicketStatus.Closed;
+
+    const saved = await this.ticketsRepository.save(ticket);
 
     if (saved.customer?.email) {
       await this.mailerService.sendMail({
@@ -33,39 +50,59 @@ async close(ticketId: number): Promise<Ticket | null> {
         subject: `Ticket #${saved.id} Resolved`,
         text: `Your ticket "${saved.title}" has been resolved and closed.`,
       });
-  }
-  return saved;
-  }
+    }
 
- async assign(ticketId: number, assigneeId: number): Promise<{ ticket: any; wasReassigned: boolean; previousAssigneeId: number | null } | null> {
-
-  const ticket = await this.findOne(ticketId);
-  
-  if (!ticket) return null;
-
-  const previousAssigneeId = ticket.assignee?.id ?? null;
-  const wasReassigned = previousAssigneeId !== null && previousAssigneeId !== assigneeId;
-
-  
-  ticket.assignee = { id: assigneeId } as any; 
-  ticket.status = TicketStatus.InProgress;
-  
-  const saved = await this.ticketsRepository.save(ticket);
-
- 
-  if (saved.customer?.email) {
-    await this.mailerService.sendMail({
-      to: saved.customer.email,
-      subject: `Ticket #${saved.id} Update`,
-      text: `A support manager has been assigned to your ticket "${saved.title}".`,
-    });
+    return saved;
   }
 
-  return { ticket: saved, wasReassigned, previousAssigneeId };
-}
+  // =========================
+  // ASSIGN TICKET
+  // =========================
 
+  async assign(
+    ticketId: number,
+    assigneeId: number,
+  ): Promise<{
+    ticket: any;
+    wasReassigned: boolean;
+    previousAssigneeId: number | null;
+  } | null> {
+    const ticket = await this.findOne(ticketId);
 
- 
+    if (!ticket) {
+      return null;
+    }
+
+    const previousAssigneeId = ticket.assignee?.id ?? null;
+
+    const wasReassigned =
+      previousAssigneeId !== null &&
+      previousAssigneeId !== assigneeId;
+
+    ticket.assignee = { id: assigneeId } as any;
+    ticket.status = TicketStatus.InProgress;
+
+    const saved = await this.ticketsRepository.save(ticket);
+
+    if (saved.customer?.email) {
+      await this.mailerService.sendMail({
+        to: saved.customer.email,
+        subject: `Ticket #${saved.id} Update`,
+        text: `A support manager has been assigned to your ticket "${saved.title}".`,
+      });
+    }
+
+    return {
+      ticket: saved,
+      wasReassigned,
+      previousAssigneeId,
+    };
+  }
+
+  // =========================
+  // SEARCH / PAGINATION
+  // =========================
+
   private static readonly SORTABLE_COLUMNS = [
     'createdAt',
     'updatedAt',
@@ -73,7 +110,6 @@ async close(ticketId: number): Promise<Ticket | null> {
     'status',
   ];
 
-  
   async search(
     status?: string,
     priority?: string,
@@ -89,127 +125,242 @@ async close(ticketId: number): Promise<Ticket | null> {
     totalPages: number;
   }> {
     const safePage = page > 0 ? page : 1;
-    const safeLimit = limit > 0 ? Math.min(limit, 100) : 10;
-    const sortColumn = TicketsService.SORTABLE_COLUMNS.includes(sortBy ?? '')
-      ? sortBy!
-      : 'createdAt';
 
-    const [data, total] = await this.ticketsRepository.findAndCount({
-      where: {
-        ...(status && { status: status as TicketStatus }),
-        ...(priority && { priority: priority as TicketPriority }),
-      },
-      relations: { customer: true, assignee: true },
-      order: { [sortColumn]: order === 'ASC' ? 'ASC' : 'DESC' },
-      skip: (safePage - 1) * safeLimit,
-      take: safeLimit,
-    });
+    const safeLimit =
+      limit > 0
+        ? Math.min(limit, 100)
+        : 10;
+
+    const sortColumn =
+      TicketsService.SORTABLE_COLUMNS.includes(sortBy ?? '')
+        ? sortBy!
+        : 'createdAt';
+
+    const [data, total] =
+      await this.ticketsRepository.findAndCount({
+        where: {
+          ...(status && {
+            status: status as TicketStatus,
+          }),
+
+          ...(priority && {
+            priority: priority as TicketPriority,
+          }),
+        },
+
+        relations: {
+          customer: true,
+          assignee: true,
+          product: true,
+        },
+
+        order: {
+          [sortColumn]:
+            order === 'ASC'
+              ? 'ASC'
+              : 'DESC',
+        },
+
+        skip: (safePage - 1) * safeLimit,
+
+        take: safeLimit,
+      });
 
     return {
       data,
       total,
       page: safePage,
       limit: safeLimit,
-      totalPages: Math.ceil(total / safeLimit),
+      totalPages: Math.ceil(
+        total / safeLimit,
+      ),
     };
   }
 
-  
-  async escalateTicket(ticketId: number): Promise<Ticket | null> {
-  const ticket = await this.findOne(ticketId);
-  if (!ticket) return null;
+  // =========================
+  // ESCALATE TICKET
+  // =========================
 
-  ticket.priority = TicketPriority.Urgent;
-  ticket.isEscalated = true;
-  ticket.escalatedAt = new Date();
-  const saved = await this.ticketsRepository.save(ticket);
+  async escalateTicket(
+    ticketId: number,
+  ): Promise<Ticket | null> {
+    const ticket = await this.findOne(ticketId);
 
-  if (saved.customer?.email) {
-    await this.mailerService.sendMail({
-      to: saved.customer.email,
-      subject: `Ticket #${saved.id} Escalated`,
-      text: `Your ticket "${saved.title}" has been marked as urgent and is being prioritized.`,
-    });
+    if (!ticket) {
+      return null;
+    }
+
+    ticket.priority = TicketPriority.Urgent;
+    ticket.isEscalated = true;
+    ticket.escalatedAt = new Date();
+
+    const saved =
+      await this.ticketsRepository.save(ticket);
+
+    if (saved.customer?.email) {
+      await this.mailerService.sendMail({
+        to: saved.customer.email,
+        subject: `Ticket #${saved.id} Escalated`,
+        text: `Your ticket "${saved.title}" has been marked as urgent and is being prioritized.`,
+      });
+    }
+
+    return saved;
   }
 
-  return saved;
-}
-  
+  // =========================
+  // ACCEPT TICKET
+  // =========================
+
   async acceptTicket(
     ticketId: number,
     managerId: number,
-  ): Promise<{ ticket: Ticket; wasReassigned: boolean; previousAssigneeId: number | null } | null> {
-    return await this.assign(ticketId, managerId);
+  ): Promise<{
+    ticket: Ticket;
+    wasReassigned: boolean;
+    previousAssigneeId: number | null;
+  } | null> {
+    return await this.assign(
+      ticketId,
+      managerId,
+    );
   }
 
-  
+  // =========================
+  // REPORT
+  // =========================
+
   async generateReport(): Promise<{
     totalTickets: number;
     escalatedCount: number;
     byStatus: Record<string, number>;
     byPriority: Record<string, number>;
   }> {
-    const totalTickets = await this.ticketsRepository.count();
-    const escalatedCount = await this.ticketsRepository.count({
-      where: { isEscalated: true },
-    });
+    const totalTickets =
+      await this.ticketsRepository.count();
 
-    const statusRows = await this.ticketsRepository
-      .createQueryBuilder('ticket')
-      .select('ticket.status', 'status')
-      .addSelect('COUNT(ticket.id)', 'count')
-      .groupBy('ticket.status')
-      .getRawMany();
+    const escalatedCount =
+      await this.ticketsRepository.count({
+        where: {
+          isEscalated: true,
+        },
+      });
 
-    const priorityRows = await this.ticketsRepository
-      .createQueryBuilder('ticket')
-      .select('ticket.priority', 'priority')
-      .addSelect('COUNT(ticket.id)', 'count')
-      .groupBy('ticket.priority')
-      .getRawMany();
+    const statusRows =
+      await this.ticketsRepository
+        .createQueryBuilder('ticket')
+        .select('ticket.status', 'status')
+        .addSelect(
+          'COUNT(ticket.id)',
+          'count',
+        )
+        .groupBy('ticket.status')
+        .getRawMany();
 
-    const byStatus: Record<string, number> = {};
+    const priorityRows =
+      await this.ticketsRepository
+        .createQueryBuilder('ticket')
+        .select('ticket.priority', 'priority')
+        .addSelect(
+          'COUNT(ticket.id)',
+          'count',
+        )
+        .groupBy('ticket.priority')
+        .getRawMany();
+
+    const byStatus: Record<string, number> =
+      {};
+
     for (const row of statusRows) {
-      byStatus[row.status] = Number(row.count);
+      byStatus[row.status] =
+        Number(row.count);
     }
 
-    const byPriority: Record<string, number> = {};
+    const byPriority: Record<string, number> =
+      {};
+
     for (const row of priorityRows) {
-      byPriority[row.priority] = Number(row.count);
+      byPriority[row.priority] =
+        Number(row.count);
     }
 
-    return { totalTickets, escalatedCount, byStatus, byPriority };
+    return {
+      totalTickets,
+      escalatedCount,
+      byStatus,
+      byPriority,
+    };
   }
 
-async getDashboard(managerId: number) {
-  const myTickets = await this.ticketsRepository.find({
-    where: { assignee: { id: managerId } } as any,
-    relations: { customer: true },
-  });
+  // =========================
+  // MANAGER DASHBOARD
+  // =========================
 
-  const statusRows = await this.ticketsRepository
-    .createQueryBuilder('ticket')
-    .select('ticket.status', 'status')
-    .addSelect('COUNT(ticket.id)', 'count')
-    .where('ticket.assigneeId = :managerId', { managerId })
-    .groupBy('ticket.status')
-    .getRawMany();
+  async getDashboard(managerId: number) {
+    const myTickets =
+      await this.ticketsRepository.find({
+        where: {
+          assignee: {
+            id: managerId,
+          },
+        } as any,
 
-  const byStatus: Record<string, number> = {};
-  for (const row of statusRows) {
-    byStatus[row.status] = Number(row.count);
+        relations: {
+          customer: true,
+          product: true,
+        },
+      });
+
+    const statusRows =
+      await this.ticketsRepository
+        .createQueryBuilder('ticket')
+        .select('ticket.status', 'status')
+        .addSelect(
+          'COUNT(ticket.id)',
+          'count',
+        )
+        .where(
+          'ticket.assigneeId = :managerId',
+          { managerId },
+        )
+        .groupBy('ticket.status')
+        .getRawMany();
+
+    const byStatus: Record<string, number> =
+      {};
+
+    for (const row of statusRows) {
+      byStatus[row.status] =
+        Number(row.count);
+    }
+
+    return {
+      totalAssigned: myTickets.length,
+
+      byStatus,
+
+      tickets: myTickets.map((ticket) => ({
+        id: ticket.id,
+
+        title: ticket.title,
+
+        status: ticket.status,
+
+        priority: ticket.priority,
+
+        product: ticket.product
+          ? {
+              id: ticket.product.id,
+              name: ticket.product.name,
+            }
+          : null,
+
+        customer: {
+          id: (ticket.customer as any)?.id,
+
+          email: (ticket.customer as any)?.email,
+        },
+      })),
+    };
   }
-
-  return {
-    totalAssigned: myTickets.length,
-    byStatus,
-    tickets: myTickets.map((t) => ({
-      id: t.id,
-      title: t.title,
-      status: t.status,
-      priority: t.priority,
-      customer: { id: (t.customer as any)?.id, email: (t.customer as any)?.email },
-    })),
-  };
-}
 }
