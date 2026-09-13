@@ -4,12 +4,15 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Ticket, TicketStatus, TicketPriority } from './entities/ticket.entity';
+import { User } from '../users/entities/user.entity';
 import { MailerService } from '@nestjs-modules/mailer';
 @Injectable()
 export class TicketsService {
   constructor(
     @InjectRepository(Ticket)
     private readonly ticketsRepository: Repository<Ticket>,
+    @InjectRepository(User)
+    private readonly usersRepository: Repository<User>,
     private readonly mailerService: MailerService,
   ) {}
   
@@ -37,6 +40,31 @@ async close(ticketId: number): Promise<Ticket | null> {
   return saved;
   }
 
+  async updateStatus(ticketId: number, status: TicketStatus): Promise<Ticket | null> {
+    const ticket = await this.findOne(ticketId);
+    if (!ticket) return null;
+
+    ticket.status = status;
+    const saved = await this.ticketsRepository.save(ticket);
+
+    if (saved.customer?.email) {
+      const statusMessages: Record<string, string> = {
+        Open: `Your ticket "${saved.title}" has been reopened.`,
+        InProgress: `Your ticket "${saved.title}" is now being worked on.`,
+        Resolved: `Your ticket "${saved.title}" has been marked as resolved.`,
+        Closed: `Your ticket "${saved.title}" has been closed.`,
+      };
+
+      await this.mailerService.sendMail({
+        to: saved.customer.email,
+        subject: `Ticket #${saved.id} Status Update: ${status}`,
+        text: statusMessages[status] ?? `Your ticket status changed to ${status}.`,
+      });
+    }
+
+    return saved;
+  }
+
  async assign(ticketId: number, assigneeId: number): Promise<{ ticket: any; wasReassigned: boolean; previousAssigneeId: number | null } | null> {
 
   const ticket = await this.findOne(ticketId);
@@ -58,6 +86,15 @@ async close(ticketId: number): Promise<Ticket | null> {
       to: saved.customer.email,
       subject: `Ticket #${saved.id} Update`,
       text: `A support manager has been assigned to your ticket "${saved.title}".`,
+    });
+  }
+
+  const newAssignee = await this.usersRepository.findOne({ where: { id: assigneeId } });
+  if (newAssignee?.email) {
+    await this.mailerService.sendMail({
+      to: newAssignee.email,
+      subject: `Ticket #${saved.id} Assigned to You`,
+      text: `Ticket "${saved.title}" has been ${wasReassigned ? 'transferred' : 'assigned'} to you. Current workload can be viewed on your dashboard.`,
     });
   }
 

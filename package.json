@@ -23,7 +23,8 @@
     "migration:run": "npm run typeorm -- migration:run -d src/data-source.ts",
     "migration:revert": "npm run typeorm -- migration:revert -d src/data-source.ts",
     "seed:admin": "ts-node -r tsconfig-paths/register src/seed-admin.ts",
-    "seed:manager": "ts-node -r tsconfig-paths/register src/seed-manager.ts"
+    "seed:manager": "ts-node -r tsconfig-paths/register src/seed-manager.ts",
+    "seed:demo": "ts-node -r tsconfig-paths/register src/seed-demo.ts"
   },
   "dependencies": {
     "@nestjs-modules/mailer": "^2.3.7",
