@@ -177,9 +177,29 @@ export class TicketsService {
     };
   }
 
-  // =========================
-  // ESCALATE TICKET
-  // =========================
+
+
+  async updateStatus(ticketId: number, status: TicketStatus): Promise<Ticket | null> {
+    const ticket = await this.findOne(ticketId);
+
+    if (!ticket) {
+      return null;
+    }
+
+    ticket.status = status;
+
+    const saved = await this.ticketsRepository.save(ticket);
+
+    if (saved.customer?.email) {
+      await this.mailerService.sendMail({
+        to: saved.customer.email,
+        subject: `Ticket #${saved.id} Status Updated`,
+        text: `The status of your ticket "${saved.title}" has been updated to ${status}.`,
+      });
+    }
+
+    return saved;
+  }
 
   async escalateTicket(
     ticketId: number,
@@ -208,9 +228,7 @@ export class TicketsService {
     return saved;
   }
 
-  // =========================
-  // ACCEPT TICKET
-  // =========================
+  
 
   async acceptTicket(
     ticketId: number,
@@ -226,9 +244,7 @@ export class TicketsService {
     );
   }
 
-  // =========================
-  // REPORT
-  // =========================
+
 
   async generateReport(): Promise<{
     totalTickets: number;
