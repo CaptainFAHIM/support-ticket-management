@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { TicketsService } from './tickets.service';
 import { AssignTicketDto } from './dto/assign-ticket.dto';
+import { UpdateStatusDto } from './dto/update-status.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -201,6 +202,27 @@ export class TicketsController {
     } catch (error) {
       throw new HttpException(
         { status: HttpStatus.BAD_REQUEST, error: error.message || 'Could not close ticket' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  @ApiOperation({ summary: 'Update a ticket status directly (Open / InProgress / Resolved / Closed)' })
+  @Roles(Role.Admin, Role.Manager)
+  @Patch(':id/status')
+  async updateStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateStatusDto,
+  ) {
+    try {
+      const ticket = await this.ticketsService.updateStatus(id, dto.status);
+      if (!ticket) {
+        throw new HttpException('Ticket not found', HttpStatus.NOT_FOUND);
+      }
+      return ticket;
+    } catch (error) {
+      throw new HttpException(
+        { status: HttpStatus.BAD_REQUEST, error: error.message || 'Status update failed' },
         HttpStatus.BAD_REQUEST,
       );
     }
