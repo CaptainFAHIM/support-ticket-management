@@ -18,6 +18,9 @@ import { UpdateCustomerDto } from './dto/updateCustomer.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/enums/role.enum';
+import { ReportCustomerDto } from './dto/report-customer.dto';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { JwtPayload } from '../common/interfaces/jwt-payload.interface';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -99,6 +102,24 @@ export class UsersController {
       );
     }
   }
+  @ApiOperation({ summary: 'Report a suspicious customer to all Admins (Manager + Admin)' })
+@Roles(Role.Admin, Role.Manager)
+@Patch('customers/:id/report')
+async reportCustomer(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() dto: ReportCustomerDto,
+  @CurrentUser() user: JwtPayload,
+) {
+  try {
+    await this.usersService.reportSuspiciousCustomer(id, dto.reason, user.email ?? 'A manager');
+    return { success: true };
+  } catch (error) {
+    throw new HttpException(
+      { status: HttpStatus.BAD_REQUEST, error: error.message || 'Could not send report' },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+}
 
   @ApiOperation({ summary: 'Delete a customer (Admin/Manager only)' })
   @Roles(Role.Admin, Role.Manager)

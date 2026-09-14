@@ -63,9 +63,10 @@ export class Ticket {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @ManyToOne('User', 'ownedTickets')
-  @JoinColumn({ name: 'customerId' })
-  customer: any;
+  
+  @ManyToOne('User', 'ownedTickets', { onDelete: 'CASCADE' })
+@JoinColumn({ name: 'customerId' })
+customer: any;
 
   @ManyToOne('User', 'assignedTickets', { nullable: true })
   @JoinColumn({ name: 'assigneeId' })

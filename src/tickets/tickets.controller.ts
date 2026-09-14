@@ -8,6 +8,8 @@ import {
   Param,
   ParseIntPipe,
   Patch,
+  Delete,
+  
   Query,
   Req,
 } from '@nestjs/common';
@@ -227,5 +229,19 @@ export class TicketsController {
       );
     }
   }
+  @ApiOperation({ summary: 'Delete a ticket (Admin only)' })
+@Roles(Role.Admin)
+@Delete(':id')
+async remove(@Param('id', ParseIntPipe) id: number) {
+  try {
+    await this.ticketsService.remove(id);
+    return { message: 'Ticket deleted successfully' };
+  } catch (error) {
+    throw new HttpException(
+      { status: HttpStatus.BAD_REQUEST, error: error.message || 'Could not delete ticket' },
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+}
 }
 //Nadia

@@ -13,10 +13,6 @@ export class TicketsService {
     private readonly mailerService: MailerService,
   ) {}
 
-  // =========================
-  // GET SINGLE TICKET
-  // =========================
-
   async findOne(id: number): Promise<Ticket | null> {
     return await this.ticketsRepository.findOne({
       where: { id },
@@ -28,10 +24,6 @@ export class TicketsService {
       },
     });
   }
-
-  // =========================
-  // CLOSE TICKET
-  // =========================
 
   async close(ticketId: number): Promise<Ticket | null> {
     const ticket = await this.findOne(ticketId);
@@ -54,10 +46,6 @@ export class TicketsService {
 
     return saved;
   }
-
-  // =========================
-  // ASSIGN TICKET
-  // =========================
 
   async assign(
     ticketId: number,
@@ -98,10 +86,6 @@ export class TicketsService {
       previousAssigneeId,
     };
   }
-
-  // =========================
-  // SEARCH / PAGINATION
-  // =========================
 
   private static readonly SORTABLE_COLUMNS = [
     'createdAt',
@@ -177,8 +161,6 @@ export class TicketsService {
     };
   }
 
-
-
   async updateStatus(ticketId: number, status: TicketStatus): Promise<Ticket | null> {
     const ticket = await this.findOne(ticketId);
 
@@ -228,8 +210,6 @@ export class TicketsService {
     return saved;
   }
 
-  
-
   async acceptTicket(
     ticketId: number,
     managerId: number,
@@ -244,7 +224,15 @@ export class TicketsService {
     );
   }
 
+  async remove(id: number): Promise<void> {
+    const ticket = await this.ticketsRepository.findOne({ where: { id } });
 
+    if (!ticket) {
+      throw new Error(`Ticket with id ${id} not found`);
+    }
+
+    await this.ticketsRepository.remove(ticket);
+  }
 
   async generateReport(): Promise<{
     totalTickets: number;
@@ -307,10 +295,6 @@ export class TicketsService {
       byPriority,
     };
   }
-
-  // =========================
-  // MANAGER DASHBOARD
-  // =========================
 
   async getDashboard(managerId: number) {
     const myTickets =
